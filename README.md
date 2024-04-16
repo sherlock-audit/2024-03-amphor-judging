@@ -1,99 +1,9 @@
-# Issue H-1: Claiming a deposit in the same Epoch in which the deposit was requested will lead to loss of funds 
-
-Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/70 
-
-## Found by 
-CryptoSan, cawfree, eeshenggoh, kennedy1030, pynschon, sammy, whitehair0330, zzykxx
-## Summary
-A user who has made a deposit request using the [`requestDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L439) function will forfeit their entire balance if they attempt to claim the deposit using the [`claimDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L508) function within the same Epoch.
-
-## Vulnerability Detail
-Within the `AsyncSynthVault` in its closed state, users can initiate a deposit through the [`requestDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L439) function. Subsequently, they would use the [`claimDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L508) function to claim vault shares. However, executing this claim within the same Epoch as the deposit request results in the total loss of the user's balance.
-
-The issue unfolds as follows:
-1. The user invokes the [`requestDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L439) function, transferring a specified amount of tokens (`assets`) to the vault. This triggers the [`_createDepositRequest`](https://github.com/sherlock-audit/2024-03-amphor/blob/main/asynchronous-vault/src/AsyncSynthVault.sol#L698) function, which increases `epochs[epochId].depositRequestBalance[receiver]` by the `assets` amount.
-2. Subsequently, the user calls the [`claimDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L508) function. This action invokes the [`_claimDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L742) internal function, setting `epochs[lastRequestId].depositRequestBalance[receiver]` to 0, where `lastRequestId` is equal to `epochId`. However, the user is not credited with any shares, as `previewClaimDeposit` yields 0.
-
-
-Proof of Code :
-
-The following test demonstrates the claim made above : 
-```solidity
-function test_poc() external {
-        
-        // set token balances
-        deal(vaultTested.asset(), user1.addr, 20);
-        deal(vaultTested.asset(), user2.addr, type(uint256).max); 
-        
-        // initial deposit when vault is open
-        vm.startPrank(user2.addr);
-        IERC20Metadata(vaultTested.asset()).approve(address(vaultTested), 10);
-        vaultTested.deposit(10, user2.addr);
-        vm.stopPrank();
-        
-        // owner closes the vault 
-        vm.prank(vaultTested.owner());
-        vaultTested.close();
-
-        vm.startPrank(user1.addr);
-        IERC20Metadata(vaultTested.asset()).approve(address(vaultTested), 20);
-        // user1 requests a deposit
-        vaultTested.requestDeposit(20, user1.addr, user1.addr,  "");
-        assertEq(vaultTested.pendingDepositRequest(user1.addr),20); // check pending deposit
-        // user1 claims the deposit
-        vaultTested.claimDeposit(user1.addr);
-        // user1 checks the pending deposit request amount
-        assertEq(vaultTested.pendingDepositRequest(user1.addr),0);
-        // user1 checks shares balance
-        assertEq(vaultTested.balanceOf(user1.addr), 0);
-       // user1 checks tokens balance
-        assertEq(IERC20Metadata(vaultTested.asset()).balanceOf(user1.addr), 0); 
-
-        vm.stopPrank();
-
-        // all three are zero, indicating loss of funds
-
-    }
-```
-To run the test : 
-1. Copy the above code and paste it into `TestClaimDeposit.t.sol`
-2. Run `forge test --match-test test_poc --ffi`
-
-## Impact
-The user loses both their initial deposit of tokens and the vault shares that they were entitled to receive.
-
-## Code Snippet
-
-## Tool used
-Manual Review
-Foundry
-
-## Recommendation
-Revert [`claimDeposit`](https://github.com/AmphorProtocol/asynchronous-vault/blob/c4f7a9b8f3d3d9aba0e43eaae38ef9b556023b0e/src/AsyncSynthVault.sol#L508) if `lastRequestId == epochId`
-
-
-
-## Discussion
-
-**sherlock-admin3**
-
-1 comment(s) were left on this issue during the judging contest.
-
-**takarez** commented:
->  valid; high(1)
-
-
-
-**sherlock-admin4**
-
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
-
-# Issue H-2: Claim functions don't validate if the epoch is settled 
+# Issue H-1: Claim functions don't validate if the epoch is settled 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/72 
 
 ## Found by 
-CryptoSan, aslanbek, fugazzi, i3arba, jennifer37, kennedy1030, mahdikarimi, sammy, turvec, whitehair0330
+CryptoSan, aslanbek, cawfree, eeshenggoh, fugazzi, jennifer37, kennedy1030, mahdikarimi, pynschon, sammy, turvec, whitehair0330, zzykxx
 ## Summary
 
 Both claim functions fail to validate if the epoch for the request has been already settled, leading to loss of funds when claiming requests for the current epoch. The issue is worsened as `claimAndRequestDeposit()` can be used to claim a deposit on behalf of any account, allowing an attacker to wipe other's requests.
@@ -335,7 +245,7 @@ Check that the epoch associated with the request is not the current epoch.
 
 The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
 
-# Issue H-3: Calling `requestRedeem` with `_msgSender() != owner`  will lead to user's shares being locked in the vault forever 
+# Issue H-2: Calling `requestRedeem` with `_msgSender() != owner`  will lead to user's shares being locked in the vault forever 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/85 
 
@@ -465,7 +375,7 @@ Modify [`_createRedeemRequest`](https://github.com/sherlock-audit/2024-03-amphor
 
 The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
 
-# Issue H-4: Exchange rate is calculated incorrectly when the vault is closed, potentially leading to funds being stolen 
+# Issue H-3: Exchange rate is calculated incorrectly when the vault is closed, potentially leading to funds being stolen 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/131 
 
@@ -624,6 +534,137 @@ It's also a good idea to perform the initial bootstrapping deposit in the [initi
 
 The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/104.
 
+**0xLogos**
+
+Escalate 
+
+Low (at least medium)
+
+I doubt that there's any profit
++1 even in 6 dp is too small 
+frontrunning and gas on mainnet too expensive, not possible on polygon zkevm 
+
+**sherlock-admin2**
+
+> Escalate 
+> 
+> Low (at least medium)
+> 
+> I doubt that there's any profit
+> +1 even in 6 dp is too small 
+> frontrunning and gas on mainnet too expensive, not possible on polygon zkevm 
+
+You've created a valid escalation!
+
+To remove the escalation from consideration: Delete your comment.
+
+You may delete or edit your escalation comment anytime before the 48-hour escalation window closes. After that, the escalation becomes final.
+
+**realfugazzi**
+
+> Escalate
+> 
+> Low (at least medium)
+> 
+> I doubt that there's any profit +1 even in 6 dp is too small frontrunning and gas on mainnet too expensive, not possible on polygon zkevm
+
+Take into account that this issue is not just about small differences of amounts in calculations, but could break redemptions accidentally since the amounts are off and eventually people cannot claim back their intents. #73 goes into this and offers a detailed PoC.
+
+**0xLogos**
+
+I see, but it's not permanent lock of funds thus not loss of funds so I think medium is apropriate severity.
+
+**WangSecurity**
+
+The reason why we decided to make it high severity, cause it's a normal workflow to open/close the vault, therefore, there are no certain external conditions for this, it will just happen even if the protocol operates in a normal way.
+
+So the absence of any external factors is the reason it's high. Both LSW and the sponsor agreed on it.
+
+**0xLogos**
+
+<img width="761" alt="image" src="https://github.com/sherlock-audit/2024-03-amphor-judging/assets/152320849/fda0a200-476c-4c40-badb-9c7694a1e454">
+
+I believe only "core functionality break" apropriate here according to rules.
+
+(About #73) Admins can easily recover funds by close vault => request dust amount => settle => silo now has enough shares.
+
+**Mihir018**
+
+I agree with @WangSecurity and I also concerned with @blablalf regarding if this is a normal flow of operation during contest and they agreed on that. And it would also result in definite loss of funds without external conditions due to calculation flow implemented.
+
+**WangSecurity**
+
+I see the point that 0xLogos raises here, but I still believe it should remain high, cause the users would lose funds due to just interacting with the protocol, nothing else is required, it's just the normal workflow, therefore, I think it should be high.
+
+**Evert0x**
+
+It looks like we agree that core functionality is being broken, but there is a disagreement if that would result in lost funds. 
+
+@0xLogos 
+
+> Take into account that this issue is not just about small differences of amounts in calculations, but could break redemptions accidentally since the amounts are off and eventually people cannot claim back their intents. 
+
+Does this argument convince you that this issue can result in lost funds?
+
+**zzykxx**
+
+The POC I coded proves funds can be stolen by abusing an implementation mistake that leads to a rounding error in favor of users.
+
+This issue should be judged high severity for consistency given that this [one](https://github.com/sherlock-audit/2023-12-jojo-exchange-update-judging/issues/57) (which has the same pre-conditions, with the exception that in this case the admin doesn't have to approve every single withdrawal) has been judged as high severity.
+
+**Evert0x**
+
+Planning to reject escalation and keep issue state as is
+
+**0xLogos**
+
+```
+//->❌ Attacker is in profit
+assertGt(totalRedeemed, totalDeposited + donation);
+```
+
+What is exact profit in this case? If it greater by 1 wei or so loss of funds doesn't make sense here
+
+**0xLogos**
+
+> Does this argument convince you that this issue can result in lost funds?
+
+No, as I said, its not permanent loss, it could be easily recovered by admin or accidentely. Also I think "normal workflow" wording can lead to misunderstanding here: PoC has certain hardcoded numbers and it can be simply edge case.
+
+**realfugazzi**
+
+> > Does this argument convince you that this issue can result in lost funds?
+> 
+> No, as I said, its not permanent loss, it could be easily recovered by admin or accidentely. Also I think "normal workflow" wording can lead to misunderstanding here: PoC has certain hardcoded numbers and it can be simply edge case.
+
+Then it is a loss for the admins, moving the loss from one entity to another doesn't take away the loss.
+
+Imagine there is a protocol that gets hacked, and the funds are returned back to their rightful owners via the protocol treasury, wouldn't you classify this as a loss?
+
+**zzykxx**
+
+I will just say 3 things:
+1. The POC shows the profit for the attacker is 1.69ETH
+2. The POC shows the funds are in the attacker wallet and cannot be recovered
+3. People should at least run the POC before escalating
+
+**Evert0x**
+
+Still planning to reject escalation and keep issue state as is. The escalation and follow up comments fail to provide a detailed reason to invalidate the issue. 
+
+**Evert0x**
+
+Result:
+High 
+Has Duplicates
+
+**sherlock-admin3**
+
+Escalations have been resolved successfully!
+
+Escalation status:
+- [0xLogos](https://github.com/sherlock-audit/2024-03-amphor-judging/issues/131/#issuecomment-2025396949): rejected
+
 # Issue M-1: The `_zapIn` function may unexpectedly revert due to the incorrect implementation of `_transferTokenInAndApprove` 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/1 
@@ -753,47 +794,7 @@ index 9943535..9cf6df9 100644
 
 The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
 
-# Issue M-2: Vaults are not boostrapped atomically 
-
-Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/50 
-
-## Found by 
-Arabadzhiev, zzykxx
-## Summary
-
-## Vulnerability Detail
-The protocol team mentioned that vaults will be bootstrapped with initial liquidity to prevent inflation attacks. To effectively prevent an inflation attack the funds should be deposited in the vault atomically during [initialization](https://github.com/sherlock-audit/2024-03-amphor/blob/main/asynchronous-vault/src/AsyncSynthVault.sol#L181), but this doesn't happen, opening up the possibility of an inflation attack on the bootstrapping transaction itself.
-
-## Impact
-The protocol team could fall victim to an inflation attack on their first deposit.
-
-## Code Snippet
-
-## Tool used
-
-Manual Review
-
-## Recommendation
-Make the first deposit in the vault during the [initialization](https://github.com/sherlock-audit/2024-03-amphor/blob/main/asynchronous-vault/src/AsyncSynthVault.sol#L181) call, this way the first deposit can't be front-run.
-
-
-
-## Discussion
-
-**sherlock-admin4**
-
-1 comment(s) were left on this issue during the judging contest.
-
-**WangAudit** commented:
-> invalid; I see what it means; but imo it's not H/M
-
-
-
-**sherlock-admin4**
-
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
-
-# Issue M-3: IERC20.transfer wil fail for USDT 
+# Issue M-2: IERC20.transfer wil fail for USDT 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/126 
 
@@ -837,4 +838,133 @@ _asset.safeTransferFrom(address(claimableSilo), receiver, assets);
 **sherlock-admin4**
 
 The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
+
+**sherlock-admin2**
+
+> Escalate
+> there is no case this will cause an issue, because the supposedly "insecure" transfer it predeced by safeTransfer of the same amount and the same token. Therefore if there is wrong amount of token, if will fail on first transfer attempt, so transfer() is protected anyway
+
+The escalation could not be created because you are not exceeding the escalation threshold.
+
+You can view the required number of additional valid issues/judging contest payouts in your Profile page,
+in the [Sherlock webapp](https://app.sherlock.xyz/audits/).
+
+
+**0xLogos**
+
+Escalate 
+
+Should be high bcz `_asset.transfer(receiver, assets)` will always fail for usdt => unable to claim.
+
+Also I think #53 is about return value not checked, but actual root case is usdt is incompatible with erc20 interface => should be info
+
+
+**sherlock-admin2**
+
+> Escalate 
+> 
+> Should be high bcz `_asset.transfer(receiver, assets)` will always fail for usdt => unable to claim.
+> 
+> Also I think #53 is about return value not checked, but actual root case is usdt is incompatible with erc20 interface => should be info
+> 
+
+You've created a valid escalation!
+
+To remove the escalation from consideration: Delete your comment.
+
+You may delete or edit your escalation comment anytime before the 48-hour escalation window closes. After that, the escalation becomes final.
+
+**0xCryptoSan**
+
+this issue https://github.com/sherlock-audit/2024-03-amphor-judging/issues/35 should be also linked as duplicate of this issue
+
+**WangSecurity**
+
+We actually wanted to make it high, but the sponsor (@blablalf scepcifically) noted that the vaults will be upgradeable, therefore, if this vulnerability were to take place, the funds would be easily retrieved. That is the reason we decided for this one to be medium instead of high.
+
+**rekxor**
+
+> We actually wanted to make it high, but the sponsor (@blablalf scepcifically) noted that the vaults will be upgradeable, therefore, if this vulnerability were to take place, the funds would be easily retrieved. That is the reason we decided for this one to be medium instead of high.
+
+I don't think so it was mentioned in the Readme of the protocol at time of contest. So, shouldn't it be remained high! @WangSecurity 
+
+**WangSecurity**
+
+Don't think so, to me it looks like this: if it happened in real life, then there would be no permanent lock of funds and they could be easily retrieved. Plus, we can add that they're not planning to make USDT vault straight away (I know it's not mentioned in the README and they shared it on discord, therefore, under Sherlock's hierarchy of truth it doesn't count, I know, I'm just elaborating on it, so it's easier for the head of judging to make the decision).
+
+**Evert0x**
+
+Will revisit this issue, but tentatively planning to reject escalation and keep issue state as is because of the argument put forward by Wang.  
+
+**0xLogos**
+
+Agree with rekxor
+
+> We actually wanted to make it high, but the sponsor noted...
+
+Judgement should be done based only on available information
+
+Also I don't think that upgradeability was a reason to downgrade similar issues in the past
+
+
+
+
+
+**rekxor**
+
+> Don't think so, to me it looks like this: if it happened in real life, then there would be no permanent lock of funds and they could be easily retrieved. Plus, we can add that they're not planning to make USDT vault straight away (I know it's not mentioned in the README and they shared it on discord, therefore, under Sherlock's hierarchy of truth it doesn't count, I know, I'm just elaborating on it, so it's easier for the head of judging to make the decision).
+
+It is mentioned in the readme that the protocol has decided to use the tokens - weth, usdc, **usdt** and wbtc. 
+![Screenshot_20240402_230235_Chrome](https://github.com/sherlock-audit/2024-03-amphor-judging/assets/156965796/71d97b22-0c49-425c-aeea-b8e965e762ca)
+
+
+**WangSecurity**
+
+The decision was made based on README, as you see I've said that it's only an add-on on top, but it wasn't the decider. Otherwise, this issue would remain low/info. It was mentioned to give the additional insight, but it doesn't change anything
+
+The only reason for this issue to be downgraded to med is that the vaults are upgradeable. And this note about the upgradeability was added cause LSW asked specifically about it (I'm unsure it changes anything, but it feels like my previous message meant that the sponsor just said it themselves, but they were asked specifically if the vault is upgradeable and it would be able to retrieve funds in such situation if it happened irl).
+
+**rekxor**
+
+The fact that it wasn't stated publicly in the readme file that the vaults are meant to be upgradeable doesn't makes it valid point to downgrade imo.
+
+**WangSecurity**
+
+But as I remember protocols rarely say in the README file that their contracts are upgradeable. And if it happens it's rather an exception than the rule + sherlocks readme doesn't have any question specifically related to upgradeability of the contracts.
+Moreover, if upgradeability is not mentioned in the README, then all the reports about upgradeability vulns should be invalid by default (not talking about this contest specifically, but about mentioning upgradeability in README in general)?
+
+Therefore, I don't think this is a valid argument that the upgradeability is not mentioned in the README file.
+
+Plus contracts use upgradeable contracts by OpenZeppelin (for example, OwnableUnpgradeable, not talking about ERC20Upgradeable here) therefore, it's reasonable to assume the vault is upgradeable.
+
+But of course I can be wrong, I don't say I'm 100% right, just expressing my point and maybe indeed you're right and I'll accept it with no remorse (also sorry if I'm harsh, don't mean to do that, thank you bringing up all these arguments).
+
+**Odhiambo526**
+
+@WangSecurity I think issue #55 is a duplicate of the same issue
+
+**Evert0x**
+
+Based on the contracts in scope, upgradeability is possible.
+
+As it's possible, I would judge this as Medium. It breaks core functionality but funds are recoverable. 
+
+
+
+**WangSecurity**
+
+@Odhiambo526 unfotunately, it's not a duplicate, it talks about `transfer` in general, when this issue is about USDT sepcifically.
+
+**Evert0x**
+
+Result:
+Medium
+Has Duplicates
+
+**sherlock-admin3**
+
+Escalations have been resolved successfully!
+
+Escalation status:
+- [0xLogos](https://github.com/sherlock-audit/2024-03-amphor-judging/issues/126/#issuecomment-2025503667): rejected
 
