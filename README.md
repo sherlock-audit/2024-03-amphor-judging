@@ -243,7 +243,13 @@ Check that the epoch associated with the request is not the current epoch.
 
 **sherlock-admin4**
 
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
+The protocol team fixed this issue in the following PRs/commits:
+https://github.com/AmphorProtocol/asynchronous-vault/pull/103
+
+
+**sherlock-admin3**
+
+The Lead Senior Watson signed off on the fix.
 
 # Issue H-2: Calling `requestRedeem` with `_msgSender() != owner`  will lead to user's shares being locked in the vault forever 
 
@@ -373,7 +379,13 @@ Modify [`_createRedeemRequest`](https://github.com/sherlock-audit/2024-03-amphor
 
 **sherlock-admin4**
 
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
+The protocol team fixed this issue in the following PRs/commits:
+https://github.com/AmphorProtocol/asynchronous-vault/pull/103
+
+
+**sherlock-admin3**
+
+The Lead Senior Watson signed off on the fix.
 
 # Issue H-3: Exchange rate is calculated incorrectly when the vault is closed, potentially leading to funds being stolen 
 
@@ -532,7 +544,9 @@ It's also a good idea to perform the initial bootstrapping deposit in the [initi
 
 **sherlock-admin4**
 
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/104.
+The protocol team fixed this issue in the following PRs/commits:
+https://github.com/AmphorProtocol/asynchronous-vault/pull/104
+
 
 **0xLogos**
 
@@ -665,6 +679,15 @@ Escalations have been resolved successfully!
 Escalation status:
 - [0xLogos](https://github.com/sherlock-audit/2024-03-amphor-judging/issues/131/#issuecomment-2025396949): rejected
 
+**zzykxx**
+
+The issue has been resolved by not adding `+1` in the [previewSettle()](https://github.com/sherlock-audit/2024-03-amphor/blob/main/asynchronous-vault/src/AsyncSynthVault.sol#L626) function.
+
+
+**sherlock-admin3**
+
+The Lead Senior Watson signed off on the fix.
+
 # Issue M-1: The `_zapIn` function may unexpectedly revert due to the incorrect implementation of `_transferTokenInAndApprove` 
 
 Source: https://github.com/sherlock-audit/2024-03-amphor-judging/issues/1 
@@ -792,7 +815,13 @@ index 9943535..9cf6df9 100644
 
 **sherlock-admin4**
 
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
+The protocol team fixed this issue in the following PRs/commits:
+https://github.com/AmphorProtocol/asynchronous-vault/pull/103
+
+
+**sherlock-admin3**
+
+The Lead Senior Watson signed off on the fix.
 
 # Issue M-2: IERC20.transfer wil fail for USDT 
 
@@ -837,7 +866,9 @@ _asset.safeTransferFrom(address(claimableSilo), receiver, assets);
 
 **sherlock-admin4**
 
-The protocol team fixed this issue in PR/commit https://github.com/AmphorProtocol/asynchronous-vault/pull/103.
+The protocol team fixed this issue in the following PRs/commits:
+https://github.com/AmphorProtocol/asynchronous-vault/pull/103
+
 
 **sherlock-admin2**
 
@@ -967,4 +998,8 @@ Escalations have been resolved successfully!
 
 Escalation status:
 - [0xLogos](https://github.com/sherlock-audit/2024-03-amphor-judging/issues/126/#issuecomment-2025503667): rejected
+
+**sherlock-admin3**
+
+The Lead Senior Watson signed off on the fix.
 
